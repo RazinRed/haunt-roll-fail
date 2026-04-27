@@ -1,0 +1,20 @@
+.claude/
+
+# sbt compiled output
+target/
+project/target/
+project/project/
+
+# Downloaded game assets (regenerate with extract_hrf_assets.py / download_missing_assets.py)
+haunt-roll-fail/webp2/
+haunt-roll-fail/fonts/
+haunt-roll-fail/omen.png
+haunt-roll-fail/background.png
+haunt-roll-fail/question-mark.png
+haunt-roll-fail/external-link.png
+
+# Runtime HSQLDB database files
+good-game-database.*
+
+# Large offline HTML files
+Sample Offline Site/
