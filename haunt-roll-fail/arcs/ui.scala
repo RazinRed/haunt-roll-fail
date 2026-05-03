@@ -56,6 +56,11 @@ class UI(val uir : ElementAttachmentPoint, arity : Int, title : String, val opti
 
     var flagship : |[Faction] = None
 
+    val scoring : |[Container] = campaign.?(newPane("scoring", Content, xstyles.pane.log))
+
+    var activeTab : String = "map"
+    var tabBarContainer : |[Container] = None
+
     val court : CanvasPane = new CanvasPaneX(newPane("court", Content), 2/2, Inside)(resources) {
         moveSpeedUp = 3.8
 
@@ -1528,11 +1533,120 @@ class UI(val uir : ElementAttachmentPoint, arity : Int, title : String, val opti
         map.draw()
         court.draw()
         ambitions.foreach(_.draw())
+        updateScoring()
+    }
+
+    def updateScoring() {
+        scoring.foreach { sp =>
+            if (callbacks.settings.has(MobileTabLayout) && activeTab == "scoring" && game.states.nonEmpty)
+                sp.replace(renderScoring(), resources, onClick)
+        }
+    }
+
+    def renderScoring() : Elem = {
+        val factions = game.factions
+
+        val currentScoringSection = {
+            val declaredAmbs = game.ambitions.%(game.declared.contains)
+            val rows = declaredAmbs./(a => {
+                val markers = game.declared(a)
+                val highVP = markers./(_.high).sum
+                val lowVP = markers./(_.low).sum
+                val ranked = factions.sortBy(f => -f.ambitionValue(a))
+                val header = a.elem.styled(xstyles.bold) ~ " (".txt ~ highVP.hlb ~ "/".txt ~ lowVP.hlb ~ ")".txt
+                val rankRows = ranked.zipWithIndex./{ case (f, i) =>
+                    val projVP = if (i == 0) highVP else if (i == 1 && lowVP > 0) lowVP else 0
+                    ((i + 1).toString.txt ~ ". ".txt ~ f.name.styled(f) ~ "  ".txt ~ f.ambitionValue(a).hlb ~ (projVP > 0).?(" → ".txt ~ projVP.hl).|(Empty)).div
+                }
+                (header.div ~ rankRows.merge).div(xstyles.chm)
+            })
+            ("Current Scoring".hl.div(xstyles.bold) ~ (declaredAmbs.none.?("No ambitions declared".spn.div).|(rows.merge))).div(xstyles.chm)
+        }
+
+        val scoreSection = {
+            val rows = factions.sortBy(f => -f.power)./(f => (f.name.styled(f) ~ "  ".txt ~ f.power.power).div)
+            ("Score".hl.div(xstyles.bold) ~ rows.merge).div(xstyles.chm)
+        }
+
+        val ambitionsSection = {
+            val rows = game.ambitions./(a => {
+                val isDeclared = game.declared.contains(a)
+                val markers = game.declared.get(a).|(Nil)
+                val vpInfo = markers./(m => (m.high.toString ~ "/" ~ m.low.toString).spn).merge
+                (isDeclared.?("✓ ".hh).|(". ".hh) ~ a.elem ~ isDeclared.?("  ".txt ~ vpInfo).|(Empty)).div
+            })
+            ("Ambitions".hl.div(xstyles.bold) ~ rows.merge).div(xstyles.chm)
+        }
+
+        val standingSection = {
+            val declaredAmbs = game.ambitions.%(game.declared.contains)
+            val rows = declaredAmbs./(a => {
+                val ranked = factions.sortBy(f => -f.ambitionValue(a))
+                val header = a.elem.styled(xstyles.bold)
+                val rankRows = ranked.zipWithIndex./{ case (f, i) =>
+                    ((i + 1).toString.txt ~ ". ".txt ~ f.name.styled(f) ~ "  ".txt ~ f.ambitionValue(a).hlb).div
+                }
+                (header.div ~ rankRows.merge).div(xstyles.chm)
+            })
+            ("Ambition Standing".hl.div(xstyles.bold) ~ (declaredAmbs.none.?("No ambitions declared".spn.div).|(rows.merge))).div(xstyles.chm)
+        }
+
+        currentScoringSection ~ HGap ~ scoreSection ~ HGap ~ ambitionsSection ~ HGap ~ standingSection
+    }
+
+    def renderTabBar() : Elem = {
+        val tabs = $("map" -> "Map", "court" -> "Court", "status" -> "Status", "log" -> "Log") ++
+            campaign.?(("scoring", "Scoring"))
+        tabs./{ case (name, label) =>
+            val active = name == activeTab
+            OnClick(("tab", name),
+                label.txt.div(ExternalStyle(if (active) "mobile-tab-active" else "mobile-tab-item"))
+            )
+        }.merge.div(ExternalStyle("mobile-tab-bar-inner"))
+    }
+
+    def setTab(name : String) {
+        activeTab = name
+        tabBarContainer.foreach(_.replace(renderTabBar(), resources, onClick))
+        updateScoring()
+        resize()
+    }
+
+    def initTabBar() {
+        val isMobile = callbacks.settings.has(MobileTabLayout)
+        val tabBarEl = dom.document.getElementById("mobile-tab-bar").asInstanceOf[dom.html.Element]
+        tabBarEl.style.display = if (isMobile) "flex" else "none"
+        if (isMobile) {
+            if (tabBarContainer.isEmpty)
+                tabBarContainer = Some(new ElementAttachmentPoint(tabBarEl).appendContainer(Content, resources, onClick))
+            tabBarContainer.foreach(_.replace(renderTabBar(), resources, onClick))
+        }
+    }
+
+    override def start() {
+        super.start()
+        initTabBar()
     }
 
     val layoutZoom = 0.49 * 0.88
 
-    def layouts = $(Layout("base",
+    def mobileContentPane : BasicPane = activeTab match {
+        case "court"   => BasicPane("court",    18*(4 + campaign.??(1)), 26, Priorities(grow = 11, maxXscale = 10.0, maxYscale = 10.0))
+        case "status"  => BasicPane("status",   24, 26,                      Priorities(grow = 11, maxXscale = 10.0, maxYscale = 10.0))
+        case "log"     => BasicPane("log",      38, 16,                      Priorities(grow = 11, maxXscale = 10.0, maxYscale = 10.0))
+        case "scoring" => BasicPane("scoring",  38, 80,                      Priorities(grow = 11, maxXscale = 10.0, maxYscale = 10.0))
+        case _         => BasicPane("map-small", 71, 50,                     Priorities(grow = 11, maxXscale = 10.0, maxYscale = 10.0))
+    }
+
+    def layouts = (
+        callbacks.settings.has(MobileTabLayout).$(
+            Layout("mobile-" + activeTab, $(
+                mobileContentPane,
+                BasicPane("action-a", 64, 36, Priorities(bottom = 1, grow = 1, maxYscale = 2.0, maxXscale = 2.0)),
+                BasicPane("action-b", 50, 47, Priorities(bottom = 1, grow = 1, maxXscale = 1.2)),
+            )./(p => p.copy(kX = p.kX * layoutZoom, kY = p.kY * layoutZoom)), boost = 100.0)
+        ) ++
+        $(Layout("base",
         $(
             BasicPane("status", 24, 26, Priorities(top = 3, left = 2, maxXscale = 1.4, maxYscale = 1.8, grow = 1)),
             BasicPane("court", 18*(4 + campaign.??(1)), 26*(1 + campaign.??(1)*0.0620), Priorities(top = 3, right = 3, maxXscale = 1.0, maxYscale = 1.0, grow = -2)),
@@ -1545,7 +1659,7 @@ class UI(val uir : ElementAttachmentPoint, arity : Int, title : String, val opti
             campaign.?(BasicPane("ambitions", 16, 60, Priorities(right = -1, left = 1, grow = -4, maxXscale = 1.0)))
         )
        ./(p => p.copy(kX = p.kX * layoutZoom, kY = p.kY * layoutZoom))
-    ))./~(l =>
+    )))./~(l =>
         l.copy(name = l.name + "-fulldim", panes = l.panes./{
             case p : BasicPane if p.name == "map-small" => FullDimPane(p.name, p.kX, p.kY, p.pr)
             case p => p
@@ -1608,6 +1722,7 @@ class UI(val uir : ElementAttachmentPoint, arity : Int, title : String, val opti
         callbacks.settings.has(VerticalFactionPanes).??("factions-vertical.") +
         callbacks.settings.has(HorizontalFactionPanes).??("factions-horizontal.") +
         callbacks.settings.has(ExpandedLogPane).??("log-expanded.") +
+        callbacks.settings.has(MobileTabLayout).??("mobile-" + activeTab + ".") +
         "arity-" + arity
 
     def overlayScrollX(e : Elem) = overlayScroll(e)(styles.seeThroughInner).onClick
@@ -1619,6 +1734,9 @@ class UI(val uir : ElementAttachmentPoint, arity : Int, title : String, val opti
     }
 
     override def onClick(a : Any) = a @@ {
+        case ("tab", name : String) =>
+            setTab(name)
+
         case ("notifications", Some(f : Faction)) =>
             shown = $
             showNotifications($(f))
@@ -1892,12 +2010,13 @@ class UI(val uir : ElementAttachmentPoint, arity : Int, title : String, val opti
             $(ZBasic(Break, tip.|(Empty).spn, () => { tip = randomTip() }, ZBasic.infoch).copy(clear = false)).%(_ => callbacks.settings.has(hrf.HideTips).not) ++
             $(ZBasic(Break, "Settings".spn, () => {
                 tip = randomTip()
-                val old = callbacks.settings.of[FactionPanesOption] ++ callbacks.settings.of[LogPaneOption]
+                val old = callbacks.settings.of[FactionPanesOption] ++ callbacks.settings.of[LogPaneOption] ++ callbacks.settings.of[MobileLayoutOption]
                 callbacks.editSettings {
-                    val neu = callbacks.settings.of[FactionPanesOption] ++ callbacks.settings.of[LogPaneOption]
-                    if (old != neu)
+                    val neu = callbacks.settings.of[FactionPanesOption] ++ callbacks.settings.of[LogPaneOption] ++ callbacks.settings.of[MobileLayoutOption]
+                    if (old != neu) {
+                        initTabBar()
                         resize()
-                    else
+                    } else
                         updateStatus()
                 }
             }).copy(clear = false))

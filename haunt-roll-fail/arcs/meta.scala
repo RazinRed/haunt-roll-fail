@@ -226,6 +226,19 @@ case object ExpandedLogPane extends LogPaneOption {
 }
 
 
+trait MobileLayoutOption extends hrf.Setting with OneOfGroup {
+    val group = "Mobile Layout"
+}
+
+case object DisabledMobileTabLayout extends MobileLayoutOption {
+    val valueOn = "Default".hlb
+}
+
+case object MobileTabLayout extends MobileLayoutOption {
+    val valueOn = "Tab Layout".hlb
+}
+
+
 trait EndOfTurnOption extends hrf.Setting with OneOfGroup {
     val group = "End of Turn"
 }
@@ -468,9 +481,10 @@ trait CommonMeta extends MetaGame {
         $(StandardShipsSize, SmallShipsSize, SmallerShipsSize, SmallestShipsSize) ++
         $(UnsortedCards, SortBySuitCards, SortByValueCards) ++
         $(AutoFactionPanes, HorizontalFactionPanes, VerticalFactionPanes) ++
-        $(AutoLogPane, ExpandedLogPane)
+        $(AutoLogPane, ExpandedLogPane) ++
+        $(DisabledMobileTabLayout, MobileTabLayout)
 
-    override def settingsDefaults = super.settingsDefaults ++ $(StarStarports, AutoEndOfTurn, ConfirmEndOfRound, AutoDiceRolls, StandardShipsSize, UnsortedCards, AutoFactionPanes, AutoLogPane)
+    override def settingsDefaults = super.settingsDefaults ++ $(StarStarports, AutoEndOfTurn, ConfirmEndOfRound, AutoDiceRolls, StandardShipsSize, UnsortedCards, AutoFactionPanes, AutoLogPane, DisabledMobileTabLayout)
 
     override def tips = super.tips ++ $(
         "You can change Starport token shape in the settings.",

@@ -18,7 +18,7 @@ sbt "run create ../good-game-database ../haunt-roll-fail http://localhost:7070 h
 
 **Terminal 1** — In **haunt-roll-fail** dir (auto-recompiles on every file save):
 ```
-sbt ~fastOptJS
+sbt fastOptJS
 ```
 
 **Terminal 2** — In **good-game** dir (starts the server):
